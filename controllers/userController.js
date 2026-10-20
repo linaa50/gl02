@@ -1,65 +1,67 @@
-const { estNonVide, estEmailValide } = require('../utils/validators');
+const User = require('../models/userModel');
+const Article = require('../models/articleModel');
 
-let users = [
-  { id: 1, name: 'Aya Ben Salah', email: 'aya@example.com', role: 'admin' },
-  { id: 2, name: 'Karim Trabelsi', email: 'karim@example.com', role: 'user' }
-];
-let prochainId = 3;
-
-// GET /api/users  (filtre optionnel ?role=admin)
-const getAllUsers = (req, res) => {
-  const { role } = req.query;
-  let resultat = users;
-
-  if (role) {
-    resultat = users.filter(u => u.role === role);
+const handleError = (err, res) => {
+  if (err.name === 'CastError') {
+    return res.status(400).json({ message: 'Identifiant de ressource invalide (format ObjectId attendu)' });
   }
-
-  res.status(200).json({ total: resultat.length, users: resultat });
+  if (err.name === 'ValidationError') {
+    return res.status(400).json({ message: err.message });
+  }
+  if (err.code === 11000) {
+    return res.status(409).json({ message: 'Cet email est deja utilise' });
+  }
+  return res.status(500).json({ message: err.message });
 };
 
-// GET /api/users/:id
-const getUserById = (req, res) => {
-  const id = Number(req.params.id);
-  const user = users.find(u => u.id === id);
-
-  if (!user) {
-    return res.status(404).json({ error: `Utilisateur ${id} introuvable` });
+const createUser = async (req, res) => {
+  try {
+    const { name, email, age, role, bio, phone } = req.body;
+    if (!name || !email) {
+      return res.status(400).json({ message: "Le nom et l'email sont requis" });
+    }
+    const exists = await User.findOne({ email });
+    if (exists) {
+      return res.status(409).json({ message: 'Cet email est deja utilise' });
+    }
+    const user = await User.create({ name, email, age, role, bio, phone });
+    res.status(201).json(user);
+  } catch (err) {
+    handleError(err, res);
   }
-
-  res.status(200).json(user);
 };
 
-// POST /api/users
-const createUser = (req, res) => {
-  const { name, email, role } = req.body;
-
-  // Validation avec le module utils/validators.js
-  if (!estNonVide(name)) {
-    return res.status(400).json({ error: 'Le nom est obligatoire et ne doit pas être vide' });
+const getUsers = async (req, res) => {
+  try {
+    const users = await User.find();
+    res.status(200).json(users);
+  } catch (err) {
+    handleError(err, res);
   }
-  if (!estEmailValide(email)) {
-    return res.status(400).json({ error: "L'email est invalide (il doit contenir '@' et '.')" });
-  }
-
-  const nouvelUser = { id: prochainId++, name, email, role: role || 'user' };
-  users.push(nouvelUser);
-
-  res.status(201).json({ message: 'Utilisateur créé', user: nouvelUser });
 };
 
-// DELETE /api/users/:id
-const deleteUser = (req, res) => {
-  const id = Number(req.params.id);
-  const existe = users.some(u => u.id === id);
-
-  if (!existe) {
-    return res.status(404).json({ error: `Impossible de supprimer : utilisateur ${id} introuvable` });
+const getUserById = async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+    if (!user) return res.status(404).json({ message: 'Utilisateur non trouve' });
+    res.status(200).json(user);
+  } catch (err) {
+    handleError(err, res);
   }
-
-  users = users.filter(u => u.id !== id);
-
-  res.status(200).json({ message: `Utilisateur ${id} supprimé avec succès` });
 };
 
-module.exports = { getAllUsers, getUserById, createUser, deleteUser };
+const deleteUser = async (req, res) => {
+  try {
+    const hasArticles = await Article.findOne({ author: req.params.id });
+    if (hasArticles) {
+      return res.status(400).json({ message: 'Impossible de supprimer un utilisateur ayant des articles publies' });
+    }
+    const user = await User.findByIdAndDelete(req.params.id);
+    if (!user) return res.status(404).json({ message: 'Utilisateur non trouve' });
+    res.status(200).json({ message: 'Utilisateur supprime avec succes', id: req.params.id });
+  } catch (err) {
+    handleError(err, res);
+  }
+};
+
+module.exports = { createUser, getUsers, getUserById, deleteUser };

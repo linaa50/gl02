@@ -1,84 +1,73 @@
-// Données en mémoire (réinitialisées au redémarrage du serveur)
-let articles = [
-  { id: 1, title: 'Bienvenue sur le blog', author: 'Admin' },
-  { id: 2, title: 'Mon premier serveur Express', author: 'Aya' },
-  { id: 3, title: 'Tester une API avec Postman', author: 'Aya' }
-];
-let prochainId = 4;
+const Article = require('../models/articleModel');
+const User = require('../models/userModel');
 
-// GET /api/articles  (filtre optionnel ?author=Aya)
-const getAllArticles = (req, res) => {
-  const { author } = req.query;
-  let resultat = articles;
-
-  if (author) {
-    resultat = articles.filter(a => a.author === author);
+const handleError = (err, res) => {
+  if (err.name === 'CastError') {
+    return res.status(400).json({ message: 'Identifiant de ressource invalide (format ObjectId attendu)' });
   }
-
-  res.status(200).json({ total: resultat.length, articles: resultat });
-};
-
-// GET /api/articles/:id
-const getArticleById = (req, res) => {
-  const id = Number(req.params.id);
-  const article = articles.find(a => a.id === id);
-
-  if (!article) {
-    return res.status(404).json({ error: `Article ${id} introuvable` });
+  if (err.name === 'ValidationError') {
+    return res.status(400).json({ message: err.message });
   }
-
-  res.status(200).json(article);
+  return res.status(500).json({ message: err.message });
 };
 
-// POST /api/articles
-const createArticle = (req, res) => {
-  const { title, author } = req.body;
-
-  if (!title || !author) {
-    return res.status(400).json({ error: "Le titre et l'auteur sont obligatoires" });
+const getAllArticles = async (req, res) => {
+  try {
+    const articles = await Article.find();
+    res.status(200).json(articles);
+  } catch (err) {
+    handleError(err, res);
   }
-
-  const nouvelArticle = { id: prochainId++, title, author };
-  articles.push(nouvelArticle);
-
-  res.status(201).json({ message: 'Article créé', article: nouvelArticle });
 };
 
-// PUT /api/articles/:id
-const updateArticle = (req, res) => {
-  const id = Number(req.params.id);
-  const { title, author } = req.body;
-
-  const index = articles.findIndex(a => a.id === id);
-
-  if (index === -1) {
-    return res.status(404).json({ error: `Article ${id} introuvable` });
+const createArticle = async (req, res) => {
+  try {
+    const { title, content, authorId } = req.body;
+    if (!title || !content || !authorId) {
+      return res.status(400).json({ message: 'title, content et authorId sont obligatoires' });
+    }
+    const author = await User.findById(authorId);
+    if (!author) {
+      return res.status(404).json({ message: 'Auteur non trouve (identifiant authorId invalide)' });
+    }
+    const newArticle = await Article.create({ title, content, author: authorId });
+    res.status(201).json(newArticle);
+  } catch (err) {
+    handleError(err, res);
   }
-
-  if (title) articles[index].title = title;
-  if (author) articles[index].author = author;
-
-  res.status(200).json({ message: 'Article mis à jour', article: articles[index] });
 };
 
-// DELETE /api/articles/:id
-const deleteArticle = (req, res) => {
-  const id = Number(req.params.id);
-  const articleExiste = articles.some(a => a.id === id);
-
-  if (!articleExiste) {
-    return res.status(404).json({ error: `Impossible de supprimer : article ${id} introuvable` });
+const getArticleById = async (req, res) => {
+  try {
+    const article = await Article.findById(req.params.id);
+    if (!article) return res.status(404).json({ message: 'Article non trouve' });
+    res.status(200).json(article);
+  } catch (err) {
+    handleError(err, res);
   }
-
-  articles = articles.filter(a => a.id !== id);
-
-  res.status(200).json({ message: `Article ${id} supprimé avec succès` });
 };
 
-module.exports = {
-  getAllArticles,
-  getArticleById,
-  createArticle,
-  updateArticle,
-  deleteArticle
+const updateArticle = async (req, res) => {
+  try {
+    const article = await Article.findByIdAndUpdate(req.params.id, req.body, {
+      new: true,
+      runValidators: true
+    });
+    if (!article) return res.status(404).json({ message: 'Article introuvable pour la mise a jour' });
+    res.status(200).json(article);
+  } catch (err) {
+    handleError(err, res);
+  }
 };
+
+const deleteArticle = async (req, res) => {
+  try {
+    const article = await Article.findByIdAndDelete(req.params.id);
+    if (!article) return res.status(404).json({ message: 'Article introuvable pour la suppression' });
+    res.status(200).json({ message: 'Article supprime avec succes', id: req.params.id });
+  } catch (err) {
+    handleError(err, res);
+  }
+};
+
+module.exports = { getAllArticles, createArticle, getArticleById, updateArticle, deleteArticle };
