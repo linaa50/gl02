@@ -2,23 +2,36 @@ const mongoose = require('mongoose');
 
 const userSchema = new mongoose.Schema(
   {
-    name: { type: String, required: [true, 'Le nom est obligatoire'], trim: true },
+    name: {
+      type: String,
+      required: [true, 'Name is required'],
+      trim: true
+    },
     email: {
       type: String,
-      required: [true, "L'email est obligatoire"],
+      required: [true, 'Email is required'],
       unique: true,
       lowercase: true,
       trim: true,
-      match: [/^[^\s@]+@[^\s@]+\.[^\s@]+$/, "Format d'email invalide"]
+      match: [/^[^\s@]+@[^\s@]+\.[^\s@]+$/, 'Invalid email format']
     },
-    age: { type: Number, min: [4, "L'age minimum autorise est de 4 ans"] },
+    password: {
+      type: String,
+      required: [true, 'Password is required'],
+      minlength: [6, 'Password must be at least 6 characters long']
+    },
     role: {
       type: String,
-      enum: { values: ['user', 'admin'], message: "{VALUE} n'est pas un role autorise" },
+      enum: {
+        values: ['user', 'admin'],
+        message: '{VALUE} is not a valid role'
+      },
       default: 'user'
     },
-    bio: { type: String, maxlength: [200, 'La biographie ne peut pas depasser 200 caracteres'] },
-    phone: { type: String, match: [/^\d{8}$/, 'Numero de 8 chiffres requis'] }
+    age: {
+      type: Number,
+      min: [4, 'Minimum allowed age is 4']
+    }
   },
   { timestamps: true }
 );
